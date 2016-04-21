@@ -14,7 +14,6 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
@@ -25,18 +24,20 @@ import org.json.JSONObject;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.net.Socket;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Scanner;
 
 public class ChatActivity extends AppCompatActivity
 {
-    ArrayList<String> messagesList;
-    ArrayAdapter<String> adapter;
+    ArrayList<Message> messagesList;
+    CustomAdapter adapter;
     String messages;
     int serverSocketPort=2048;
+    int fileServerSocketPort=4096;
     String chatIP;
     ListView lvChat;
     EditText etChatbox;
@@ -56,9 +57,9 @@ public class ChatActivity extends AppCompatActivity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_chat);
 
-        messagesList=new ArrayList<String>();
+        messagesList=new ArrayList<Message>();
 
-        adapter=new ArrayAdapter<String>(getApplicationContext(),android.R.layout.simple_list_item_1,messagesList);
+        adapter=new CustomAdapter(getApplicationContext(),messagesList);
 
         lvChat=(ListView)findViewById(R.id.lvChat);
         lvChat.setDividerHeight(0);
@@ -86,14 +87,15 @@ public class ChatActivity extends AppCompatActivity
                 log("btnSend.onClick: Send button clicked");
                 String message = etChatbox.getText().toString();
                 etChatbox.setText("");
-                //String senderIP = ownIP;
-                //String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(Calendar.getInstance().getTime());
+                String senderIP = ownIP;
+                String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(Calendar.getInstance().getTime());
                 JSONObject msgObject = new JSONObject();
                 try
                 {
                     msgObject.put("Message", message);
-                    //msgObject.put("Sender IP", senderIP);
-                    //msgObject.put("Timestamp", timeStamp);
+                    msgObject.put("Sender IP", senderIP);
+                    msgObject.put("Timestamp", timeStamp);
+                    msgObject.put("isMe",true);
                     log("btnSend.onClick: Message object created");
                 }
                 catch (JSONException e)
@@ -101,43 +103,12 @@ public class ChatActivity extends AppCompatActivity
                     log("btnSend.onClick: " + e.toString());
                     log("btnSend.onClick: Message object not created");
                 }
-
-                File file = new File(path);
-
-                try
-                {
-                    if(!file.exists())
-                    {
-                        file.createNewFile();
-                        FileWriter fw=new FileWriter(file);
-                        fw.append("Me: "+msgObject.getString("Message"));
-                        fw.append("\n");
-                        fw.flush();
-                        fw.close();
-                    }
-                    else
-                    {
-                        FileWriter fw=new FileWriter(file,true);
-                        fw.append("Me: "+msgObject.getString("Message"));
-                        fw.append("\n");
-                        fw.flush();
-                        fw.close();
-                    }
-                }
-                catch (IOException e)
-                {
-                    e.printStackTrace();
-                }
-                catch (JSONException e)
-                {
-                    e.printStackTrace();
-                }
+                MessageWriter.writeSentMessage(msgObject, path);
                 sendMsg(msgObject);
                 readMessages();
-                lvChat.setSelection(adapter.getCount()-1);
+                lvChat.setSelection(adapter.getCount() - 1);
             }
         });
-
         readMessages();
     }
 
@@ -163,39 +134,55 @@ public class ChatActivity extends AppCompatActivity
     {
         log("sendMsg: Start sendMsg");
         new SocketServerTask().execute(msgObject);
-        log("sendMsg: End sendMsg");
+        readMessages();
     }
 
     public void readMessages()
     {
+        log("readMessages started");
         File file = new File(path);
         if (file.exists())
         {
             try
             {
                 Scanner fr=new Scanner(file);
-                fr.useDelimiter("\\Z"); // \Z means EOF.
+                    fr.useDelimiter("\\Z"); // \Z means EOF.
                 messages = fr.next();
                 fr.close();
             }
             catch (FileNotFoundException e)
             {
-                log(e.toString());
+                e.printStackTrace();
             }
         }
+
         else
         {
             messages="No chats to display\n";
         }
         String[] messagesArray=messages.split("\n");
-
+        messagesList.clear();
         int count;
-
-        for(count=0;count<messagesArray.length;count++)
+        try
         {
-            messagesList.add(messagesArray[count]);
+            log("Iterating through messages array");
+            for(count=0;count<messagesArray.length;count++)
+            {
+                log("Parsing "+messagesArray[count]);
+                if (messagesArray[count].startsWith("Me"))
+                    messagesList.add(new Message(messagesArray[count],true));
+
+                else messagesList.add(new Message(messagesArray[count],false));
+
+            }
+            log("messagesList populated");
+
+            adapter.notifyDataSetChanged();
         }
-        adapter.notifyDataSetChanged();
+        catch(Exception e)
+        {
+            e.printStackTrace();
+        }
     }
 
     private class SocketServerTask extends AsyncTask<JSONObject, Void, Void>
@@ -212,7 +199,6 @@ public class ChatActivity extends AppCompatActivity
             jsonData = params[0];
             try
             {
-                log("SocketServerTask.doInBackground: Creating socket");
                 socket = new Socket(chatIP, serverSocketPort);
                 log("SocketServerTask.doInBackground: Created socket");
                 dataOutputStream = new DataOutputStream(socket.getOutputStream());
@@ -236,7 +222,7 @@ public class ChatActivity extends AppCompatActivity
         {
             if(success)
                 log("onPostExecute: Message "+jsonData.toString()+" sent");
-            else log("onPostExecute: Message not sent");
+            else log("onPostExecute: Message"+jsonData.toString()+" not sent");
         }
     }
 

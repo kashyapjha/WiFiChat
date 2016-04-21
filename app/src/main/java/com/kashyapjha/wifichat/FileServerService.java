@@ -1,8 +1,6 @@
 package com.kashyapjha.wifichat;
 
-import android.app.Notification;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
@@ -14,25 +12,21 @@ import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.NotificationCompat;
 import android.util.Log;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 
-public class ChatServerService extends Service
+public class FileServerService extends Service
 {
-    public String message;
     public String ip;
-    static final int socketServerPort = 2048;
-    String TAG="WiFiChat_ChatServerService";
+    static final int socketServerPort = 4096;
+    String TAG="WiFiChat_FileServerService";
     @Nullable
     @Override
     public IBinder onBind(Intent intent)
     {
-            return null;
+        return null;
     }
     public void onCreate()
     {
@@ -88,38 +82,12 @@ public class ChatServerService extends Service
                     Log.d(TAG, "SocketServerThread.run: Message received");
 
                     dataInputStream = new DataInputStream(socket.getInputStream());
-                    String messageFromClient=dataInputStream.readUTF();
 
-                    final JSONObject msgObject=new JSONObject(messageFromClient);
-                    msgObject.put("isMe", false);
+                    //TODO file creation code here
 
-                    String path=getApplicationContext().getDir("chats",MODE_PRIVATE).getPath()+socket.getInetAddress();
-
-                    Log.d(TAG, path);
-
-                    MessageWriter.writeReceivedMessage(msgObject, path);
-
-                    ip=socket.getInetAddress().toString();
-                    message=msgObject.getString("Message");
+                    sendMessage();
 
                     notifyMessage();
-                    sendMessage();
-                    Log.d(TAG, "SocketServerThread.run: Message " + messageFromClient + " received from " + socket.getInetAddress() + ":" + socket.getPort());
-
-                    //Uncomment to toast received message
-                    /*
-                    Handler h = new Handler(getMainLooper());
-
-                    h.post(new Runnable() {
-                        @Override
-                        public void run() {
-                            try {
-                                Toast.makeText(getApplicationContext(), "Message received: " + msgObject.getString("Message"), Toast.LENGTH_SHORT).show();
-                            } catch (JSONException e) {
-                                Log.d(TAG, "SocketServerThread.run: " + e.toString());
-                            }
-                        }
-                    });*/
 
                     socket.close();
                     Log.d(TAG, "SocketServerThread.run: Closed socket");
@@ -130,11 +98,6 @@ public class ChatServerService extends Service
             }
 
             catch (IOException e)
-            {
-                Log.d(TAG, "SocketServerThread.run: "+e.toString());
-            }
-
-            catch (JSONException e)
             {
                 Log.d(TAG, "SocketServerThread.run: "+e.toString());
             }
@@ -152,7 +115,7 @@ public class ChatServerService extends Service
         NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this);
         mBuilder.setSmallIcon(R.drawable.message_icon);
         mBuilder.setContentTitle("Message from "+ip);
-        mBuilder.setContentText(message);
+        mBuilder.setContentText(new String());
         NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         mNotificationManager.notify(1,mBuilder.build());
     }
