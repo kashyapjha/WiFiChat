@@ -38,6 +38,8 @@ public class MainActivity extends AppCompatActivity
         setContentView(R.layout.activity_main);
         Intent i=new Intent(getApplicationContext(),ChatServerService.class);
         startService(i);
+        Intent i2=new Intent(getApplicationContext(),FileServerService.class);
+        startService(i2);
         lvUsers=(ListView)findViewById(R.id.lvUsers);
         lvUsers.setBackgroundColor(Color.BLACK);
         WifiManager wm = (WifiManager) getSystemService(WIFI_SERVICE);

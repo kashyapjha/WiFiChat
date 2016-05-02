@@ -5,6 +5,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.net.wifi.WifiManager;
+import android.os.Environment;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.support.annotation.Nullable;
@@ -13,12 +14,17 @@ import android.support.v7.app.NotificationCompat;
 import android.util.Log;
 
 import java.io.DataInputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 
 public class FileServerService extends Service
 {
+    String imgpath= "/sdcard/wifichat/Images/Sent";
     public String ip;
     static final int socketServerPort = 4096;
     String TAG="WiFiChat_FileServerService";
@@ -30,7 +36,7 @@ public class FileServerService extends Service
     }
     public void onCreate()
     {
-        Log.d(TAG, "onCreate: Service Started");
+        Log.d(TAG, "onCreate: File Service Started");
         WifiManager wm = (WifiManager) getSystemService(Context.WIFI_SERVICE);
         WifiManager.WifiLock wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL, "WiFiChat_Lock");
 
@@ -47,60 +53,78 @@ public class FileServerService extends Service
     @Override
     public int onStartCommand(Intent intent,int flags, int startId)
     {
-        Log.d(TAG, "onStartCommand: Starting socketServerThread");
+        Log.d(TAG, "onStartCommand: Starting fileSocketServerThread");
         new Thread(new Runnable()
         {
             @Override
             public void run()
             {
-                new SocketServerThread().run();
+                new FileSocketServerThread().run();
             }
         }).start();
         return Service.START_STICKY;
     }
 
-    private class SocketServerThread extends Thread
+    private class FileSocketServerThread extends Thread
     {
         @Override
         public void run()
         {
-            Log.d(TAG,"SocketServerThread.run: socketServerThread running");
+            Log.d(TAG, "FileSocketServerThread.run: socketServerThread running");
 
             try
             {
                 ServerSocket serverSocket=null;
-                DataInputStream dataInputStream=null;
-
+                DataInputStream dis=null;
+                FileOutputStream fos=null;
                 while (true)
                 {
+                    String filename= new SimpleDateFormat("yyyyMMdd_HHmmss").format(Calendar.getInstance().getTime())+".jpg";
+
+                    File path=new File("/sdcard/wifichat/images/sent");
+                    path.mkdirs();
+
                     serverSocket = new ServerSocket(socketServerPort);
-
-                    Log.d(TAG,"SocketServerThread.run: Server started on port "+serverSocket.getLocalPort());
-
+                    Log.d(TAG, "FileSocketServerThread.run: Server started on port " + serverSocket.getLocalPort());
                     Socket socket = serverSocket.accept();
+                    //sleep(10000);
+                    dis=new DataInputStream(socket.getInputStream());
+                    int len=dis.readInt();
+                    Log.d(TAG, "Size of InputStream: "+len);
+                    if(len>0)
+                    {
+                        int i=0;
+                        byte[] bytes =new byte[len];
+                        dis.readFully(bytes,0,bytes.length);
+                        Log.d(TAG, "FileSocketServerThread.run: Size of received byte array: " + bytes.length);
+                        Log.d(TAG, "FileSocketServerThread.run: Received byte array: ");
+                        for(i=0;i<bytes.length-1;i++);
+                        {
+                            Log.d(TAG, "bytes: "+bytes[i]);
+                        }
+                        fos=new FileOutputStream(Environment.getExternalStorageDirectory().getAbsolutePath()+"/wifichat/images/"+filename);
+                        fos.write(bytes);
+                        fos.close();
+                    }
 
-                    Log.d(TAG, "SocketServerThread.run: Message received");
-
-                    dataInputStream = new DataInputStream(socket.getInputStream());
-
-                    //TODO file creation code here
+                    ip=socket.getLocalAddress().toString();
+                    Log.d(TAG, "FileSocketServerThread.run: Started accepting connections");
 
                     sendMessage();
-
                     notifyMessage();
-
                     socket.close();
-                    Log.d(TAG, "SocketServerThread.run: Closed socket");
-
                     serverSocket.close();
-                    Log.d(TAG, "SocketServerThread.run: serverSocket closed");
+                    Log.d(TAG, "FileSocketServerThread.run: Closed socket");
                 }
             }
 
             catch (IOException e)
             {
-                Log.d(TAG, "SocketServerThread.run: "+e.toString());
-            }
+                Log.d(TAG, "Printing Stacktrace: ");
+                e.printStackTrace();
+            } //catch (InterruptedException e) {
+                //e.printStackTrace();
+            //}
         }
     }
     private void sendMessage()
@@ -115,7 +139,7 @@ public class FileServerService extends Service
         NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this);
         mBuilder.setSmallIcon(R.drawable.message_icon);
         mBuilder.setContentTitle("Message from "+ip);
-        mBuilder.setContentText(new String());
+        mBuilder.setContentText("Image received");
         NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         mNotificationManager.notify(1,mBuilder.build());
     }
